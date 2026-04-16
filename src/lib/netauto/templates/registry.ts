@@ -18,12 +18,10 @@ import {
   SSH_PARTIAL,
   NTP_PARTIAL,
   VLAN_DB_PARTIAL,
+  ENDPOINTS_PARTIAL,
 } from "./partials";
 
 import { DeviceRole } from "../types";
-
-// Helpers to compose a full device config by concatenating partials
-const section = (...parts: string[]) => parts.join("\n!\n");
 
 // ------------------------------------------------------------------
 // ROUTER template
@@ -50,6 +48,7 @@ const ROUTER_HEADER = [
 
 const ROUTER_TEMPLATE = [
   ROUTER_HEADER,
+  ENDPOINTS_PARTIAL,
   INTERFACES_PARTIAL,
   OSPF_PARTIAL,
   EIGRP_PARTIAL,
@@ -84,6 +83,7 @@ const L3_HEADER = [
 
 const L3_SWITCH_TEMPLATE = [
   L3_HEADER,
+  ENDPOINTS_PARTIAL,
   VTP_PARTIAL,
   STP_PARTIAL,
   VLAN_DB_PARTIAL,
@@ -122,6 +122,7 @@ const L2_HEADER = [
 
 const L2_SWITCH_TEMPLATE = [
   L2_HEADER,
+  ENDPOINTS_PARTIAL,
   VTP_PARTIAL,
   STP_PARTIAL,
   VLAN_DB_PARTIAL,

@@ -63,6 +63,39 @@ env.addFilter("expand_iface", (name: string) => {
 // ------------------------------------------------------------------
 
 export function buildContext(device: NormalizedDevice) {
+  // Endpoints connected to THIS device (via "<hostname>:<iface>")
+  const endpointsHere = Object.entries(device.endpoints ?? {})
+    .filter(([, ep]) => typeof ep.connected_to === "string" && ep.connected_to.split(":")[0] === device.hostname)
+    .map(([name, ep]) => ({ name, ...ep }));
+
+  // Pre-render the endpoints comment block as a raw string because
+  // Nunjucks' trimBlocks eats newlines after loop control tags and
+  // collapses multi-line comment blocks.
+  const endpointsComment = endpointsHere.length === 0
+    ? ""
+    : [
+        "! --- Connected endpoints ---",
+        ...endpointsHere.map((ep) => {
+          const parts: string[] = [`!   ${ep.name}`];
+          if (ep.vlan) parts.push(`vlan=${ep.vlan}`);
+          if (ep.ip_assignment) parts.push(`addr=${ep.ip_assignment}`);
+          if (ep.ip) parts.push(`ip=${ep.ip}`);
+          if (ep.connected_to) parts.push(`port=${String(ep.connected_to).replace(`${device.hostname}:`, "")}`);
+          return parts.join("  ");
+        }),
+        "! ---------------------------",
+      ].join("\n");
+
+  // Dedupe OSPF networks (same network+area may appear via interface tag
+  // AND via global areas[].networks) to avoid duplicate `network` lines.
+  const seen = new Set<string>();
+  const ospfNetworks = ospfNetworksForDevice(device).filter((n) => {
+    const key = `${n.network}|${n.wildcard}|${n.area}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   return {
     hostname: device.hostname,
     role: device.role,
@@ -82,8 +115,10 @@ export function buildContext(device: NormalizedDevice) {
     vlans: deviceVlans(device),
     global_vlans: device.globalVlans ?? [],
     global_routing: device.globalRouting ?? null,
+    endpoints: endpointsHere,
+    endpoints_comment: endpointsComment,
     // Computed helpers
-    ospf_networks: ospfNetworksForDevice(device),
+    ospf_networks: ospfNetworks,
   };
 }
 

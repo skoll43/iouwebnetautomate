@@ -2,9 +2,21 @@
 // Topology Normalizer
 // Converts the loose abstract YAML into a strongly-typed,
 // fully-resolved structure ready for template rendering.
+// Supports both hierarchy styles:
+//   (A) Declarative top-level `routing:` block — auto-applied to
+//       every OSPF-capable device based on interface ospf_area tags.
+//   (B) Per-device `routing: [...]` arrays — full control for
+//       multi-protocol or asymmetric deployments.
 // ============================================================
 
-import { TopologyDef, DeviceConfig, InterfaceDef, DeviceRole } from "./types";
+import {
+  TopologyDef,
+  DeviceConfig,
+  DeviceRole,
+  RoutingProtocol,
+  GlobalRouting,
+  EndpointDef,
+} from "./types";
 import { resolveVars } from "./resolver";
 
 export interface NormalizedDevice {
@@ -16,6 +28,8 @@ export interface NormalizedDevice {
   globalVlans: TopologyDef["vlans"];
   /** Global routing block (resolved) */
   globalRouting: TopologyDef["routing"];
+  /** Endpoints defined in the topology (for documentation comment block) */
+  endpoints: Record<string, EndpointDef>;
 }
 
 export function normalizeTopology(raw: TopologyDef): NormalizedDevice[] {
@@ -24,6 +38,7 @@ export function normalizeTopology(raw: TopologyDef): NormalizedDevice[] {
   const topo = resolveVars(raw, vars) as TopologyDef;
 
   const devices: NormalizedDevice[] = [];
+  const endpoints = (topo.devices?.endpoints ?? {}) as Record<string, EndpointDef>;
 
   const pushGroup = (
     group: Record<string, DeviceConfig> | undefined,
@@ -31,13 +46,31 @@ export function normalizeTopology(raw: TopologyDef): NormalizedDevice[] {
   ) => {
     if (!group) return;
     for (const [hostname, cfg] of Object.entries(group)) {
+      // Clone + inject the hostname
+      const deviceCfg: DeviceConfig = { hostname, ...cfg };
+
+      // Auto-synthesize routing block from global routing hierarchy
+      // if the device has none of its own.
+      deviceCfg.routing = synthesizeRouting(deviceCfg, topo.routing, role, hostname);
+
+      // Auto-fill interface descriptions from connected_to when empty
+      if (deviceCfg.interfaces) {
+        deviceCfg.interfaces = deviceCfg.interfaces.map((iface) => ({
+          ...iface,
+          description:
+            iface.description ??
+            (iface.connected_to ? `To ${iface.connected_to}` : undefined),
+        }));
+      }
+
       devices.push({
         hostname,
         role,
         platform: cfg.platform ?? "cisco_ios",
-        config: { hostname, ...cfg },
+        config: deviceCfg,
         globalVlans: topo.vlans,
         globalRouting: topo.routing,
+        endpoints,
       });
     }
   };
@@ -50,12 +83,104 @@ export function normalizeTopology(raw: TopologyDef): NormalizedDevice[] {
   return devices;
 }
 
+// ------------------------------------------------------------------
+// Routing synthesis from the global declarative block
+// ------------------------------------------------------------------
+
+function synthesizeRouting(
+  cfg: DeviceConfig,
+  global: GlobalRouting | undefined,
+  role: DeviceRole,
+  hostname: string
+): RoutingProtocol[] | undefined {
+  // Device has its own routing configuration — honor it as-is.
+  if (cfg.routing && cfg.routing.length > 0) return cfg.routing;
+
+  // No global block or role is L2-only → nothing to do.
+  if (!global) return undefined;
+  if (role === "l2_switch") return undefined;
+
+  const proto = (global.protocol ?? "").toString().toLowerCase();
+
+  // Does this device have at least one interface that speaks this protocol?
+  const hasOspfTag =
+    (cfg.interfaces ?? []).some((i) => i.ospf_area !== undefined) ||
+    (cfg.svis ?? []).some((s) => s.ospf_area !== undefined);
+
+  if (proto === "ospf") {
+    if (!hasOspfTag) return undefined;
+    // The interface/SVI ospf_area tags are the source of truth for the
+    // `network ... area N` lines — we set `areas: []` here so the OSPF
+    // partial does NOT emit them again from the global block.
+    // (Duplicate network statements are harmless on IOS but visually
+    // noisy.)
+    return [
+      {
+        protocol: "ospf",
+        ospf: {
+          process_id: global.process_id ?? 1,
+          router_id: global.auto_router_id
+            ? deriveRouterId(hostname, role)
+            : undefined,
+          areas: [],
+        },
+      },
+    ];
+  }
+
+  if (proto === "eigrp") {
+    if (!global.as_number) return undefined;
+    return [
+      {
+        protocol: "eigrp",
+        eigrp: {
+          as_number: global.as_number,
+          networks: global.networks ?? [],
+          no_auto_summary: true,
+        },
+      },
+    ];
+  }
+
+  return undefined;
+}
+
+/**
+ * Derive a deterministic, role-scoped router-id.
+ *   routers   : N.N.N.N         (R1 → 1.1.1.1,   R3 → 3.3.3.3)
+ *   l3_switch : 10.N.N.N        (DLS1 → 10.1.1.1, DLS2 → 10.2.2.2)
+ *   firewall  : 172.16.N.N      (FW1 → 172.16.1.1)
+ *   fallback  : simple hash inside 10.0.0.0/8
+ */
+function deriveRouterId(hostname: string, role: DeviceRole): string {
+  const digits = hostname.match(/\d+/);
+  const n = digits ? parseInt(digits[0], 10) : NaN;
+  if (!isNaN(n) && n > 0 && n < 256) {
+    switch (role) {
+      case "router":     return `${n}.${n}.${n}.${n}`;
+      case "l3_switch":  return `10.${n}.${n}.${n}`;
+      case "firewall":   return `172.16.${n}.${n}`;
+      default:           return `${n}.${n}.${n}.${n}`;
+    }
+  }
+  // Fallback: simple hash inside 10.0.0.0/8
+  let h = 0;
+  for (let i = 0; i < hostname.length; i++) h = (h * 31 + hostname.charCodeAt(i)) >>> 0;
+  return `10.${(h >>> 16) & 0xff}.${(h >>> 8) & 0xff}.${h & 0xff}`;
+}
+
+// ------------------------------------------------------------------
+// VLAN derivation
+// ------------------------------------------------------------------
+
 /**
  * Build the list of VLANs a given device should configure.
  * L3 switches: all vlans (they are the VTP server / SVI owner).
  * L2 switches: only the vlans referenced on their access ports.
  */
-export function deviceVlans(device: NormalizedDevice): Array<{ id: string; name: string }> {
+export function deviceVlans(
+  device: NormalizedDevice
+): Array<{ id: string; name: string }> {
   const globalVlans = device.globalVlans ?? [];
   if (device.role === "l3_switch") {
     return globalVlans.map((v) => ({ id: v.vlan_id, name: v.name }));
@@ -71,6 +196,10 @@ export function deviceVlans(device: NormalizedDevice): Array<{ id: string; name:
   }
   return [];
 }
+
+// ------------------------------------------------------------------
+// OSPF network aggregation
+// ------------------------------------------------------------------
 
 /**
  * Aggregate all OSPF network/area statements to inject into the OSPF router

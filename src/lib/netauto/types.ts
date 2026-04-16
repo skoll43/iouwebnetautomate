@@ -226,7 +226,55 @@ export interface DeviceConfig {
   vlans_db?: string[];        // vlan ids this device should configure in vlan db
 }
 
+// ----- ENDPOINTS -----
+// Non-configurable hosts (PCs, servers) that terminate on access ports.
+// Rendered as a "! Endpoints" comment block for documentation purposes.
+export interface EndpointDef {
+  vlan?: string;
+  ip_assignment?: "DHCP" | "static";
+  ip?: string;
+  connected_to?: string;      // e.g. "ALS1:E0/2"
+  description?: string;
+}
+
 // ----- TOPOLOGY ROOT -----
+
+/**
+ * Global routing block.
+ *
+ * Two styles supported:
+ *
+ *  (A) Declarative top-level OSPF:
+ *      routing:
+ *        protocol: OSPF
+ *        areas:
+ *          - area_id: 0
+ *            networks: ["192.168.0.0/30"]
+ *
+ *      When present, every router / L3 switch with at least one
+ *      `ospf_area` annotation gets a `router ospf 1` block derived
+ *      from the union of:
+ *        • its own interface-level ospf_area networks
+ *        • the globally declared areas (if the network falls within
+ *          that area's CIDR list)
+ *
+ *  (B) Per-device routing (advanced):
+ *      Each device declares its own `routing:` array with OSPF/EIGRP/BGP
+ *      blocks.  This overrides the global block.
+ */
+export interface GlobalRouting {
+  protocol: "OSPF" | "EIGRP" | "BGP" | string;
+  /** OSPF areas shared by all devices */
+  areas?: OspfArea[];
+  /** OSPF process-id (default 1) */
+  process_id?: number;
+  /** Automatically assign unique router-id based on device hostname */
+  auto_router_id?: boolean;
+  /** EIGRP AS number when protocol=EIGRP */
+  as_number?: number;
+  /** Global networks to advertise for EIGRP */
+  networks?: string[];
+}
 
 export interface TopologyDef {
   topology_name: string;
@@ -234,17 +282,14 @@ export interface TopologyDef {
 
   vlans?: VlanDef[];
 
-  /** Global routing (protocol blocks that apply to all capable devices) */
-  routing?: {
-    protocol: string;         // kept for backwards compat
-    areas?: OspfArea[];       // OSPF shorthand
-  };
+  /** Global routing block – see GlobalRouting for semantics */
+  routing?: GlobalRouting;
 
   devices: {
     routers?: Record<string, DeviceConfig>;
     layer3_switches?: Record<string, DeviceConfig>;
     layer2_switches?: Record<string, DeviceConfig>;
     firewalls?: Record<string, DeviceConfig>;
-    endpoints?: Record<string, unknown>;
+    endpoints?: Record<string, EndpointDef>;
   };
 }

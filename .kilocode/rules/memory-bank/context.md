@@ -81,6 +81,7 @@ To add a new protocol:
 | 2026-04-16 | Fixed dark theme Tailwind v4 preflight conflicts |
 | 2026-04-16 | Major config-correctness audit & fixes: /32 mask, static route newline, DHCP indent, native VLAN, nonegotiate, SVIs with HSRP, L3 switch routed-interface `no switchport`, ospf_area on SVIs, port-channel member switchport, bpduguard per-port |
 | 2026-04-16 | Added MST support: MstConfig + MstInstance types, region/revision/instance mappings, per-instance root role + explicit priority + timers; new EXAMPLE_MST topology; `spanning-tree extend system-id` emitted by default; vlan_priorities override field for PVST |
+| 2026-04-16 | Declarative top-level routing hierarchy: `routing: {protocol, process_id, auto_router_id, areas[]}` auto-synthesizes per-device OSPF blocks from interface `ospf_area` tags. Added `endpoints:` section (PCs/hosts) rendered as documentation comment block. `connected_to` now auto-fills interface descriptions. `auto_router_id` produces role-scoped unique IDs (R1→1.1.1.1, DLS1→10.1.1.1, FW1→172.16.1.1). OSPF network statement dedup across global+interface-derived sources. |
 
 ## Config Correctness Checklist (verified)
 

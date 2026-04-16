@@ -193,3 +193,10 @@ export const VLAN_DB_PARTIAL = `{% for vlan in vlans %}
 vlan {{ vlan.id }}
  name {{ vlan.name }}
 {% endfor %}`.trim();
+
+// ----- ENDPOINTS (documentation only) -----
+// Rendered as a comment block listing every endpoint attached to
+// this device.  Pre-rendered in engine.ts (as `endpoints_comment`)
+// to bypass Nunjucks' trimBlocks quirk that collapses multi-line
+// loop output in pure-comment sections.
+export const ENDPOINTS_PARTIAL = `{{ endpoints_comment }}`.trim();
