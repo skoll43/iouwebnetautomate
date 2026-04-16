@@ -4,6 +4,7 @@
 
 export const EXAMPLE_MULTI_AREA_OSPF = `topology_name: "Multi-Area OSPF with L2/L3 Switching"
 
+# Abstract placeholders - resolved to integers before rendering.
 variables:
   W: "19"
   X: "33"
@@ -11,18 +12,18 @@ variables:
   Z: "85"
 
 vlans:
-  - vlan_id: "19"
+  - vlan_id: "W"
     name: "NOMBRE-ALUMNO"
-    subnet: "172.30.19.0/24"
-  - vlan_id: "33"
+    subnet: "172.30.W.0/24"
+  - vlan_id: "X"
     name: "APELLIDO-ALUMNO"
-    subnet: "172.30.33.0/24"
-  - vlan_id: "61"
+    subnet: "172.30.X.0/24"
+  - vlan_id: "Y"
     name: "ADMIN"
-    subnet: "172.30.61.0/24"
-  - vlan_id: "85"
+    subnet: "172.30.Y.0/24"
+  - vlan_id: "Z"
     name: "NATIVA"
-    subnet: "172.30.85.0/24"
+    subnet: "172.30.Z.0/24"
 
 devices:
   routers:
@@ -30,6 +31,7 @@ devices:
       interfaces:
         - name: "Loopback0"
           ip: "8.8.8.8/32"
+          description: "Simulated DNS/Internet"
         - name: "S1/0"
           ip: "222.0.0.2/30"
           description: "Link to R1"
@@ -44,11 +46,11 @@ devices:
       interfaces:
         - name: "S1/0"
           ip: "222.0.0.1/30"
-          description: "Uplink to R4/ISP"
+          description: "Uplink to R4 (ISP)"
         - name: "E0/0"
-          ip: "192.168.85.1/30"
-          description: "To R2 (Area 85)"
-          ospf_area: 85
+          ip: "192.168.Z.1/30"
+          description: "To R2 (Area Z)"
+          ospf_area: "Z"
       routing:
         - protocol: "ospf"
           ospf:
@@ -56,13 +58,18 @@ devices:
             router_id: "1.1.1.1"
             areas: []
             default_route_originate: true
+        - protocol: "static"
+          routes:
+            - prefix: "0.0.0.0/0"
+              next_hop: "222.0.0.2"
+              description: "default-via-R4"
 
     R2:
       interfaces:
         - name: "E0/0"
-          ip: "192.168.85.2/30"
-          description: "To R1 (Area 85)"
-          ospf_area: 85
+          ip: "192.168.Z.2/30"
+          description: "To R1 (Area Z)"
+          ospf_area: "Z"
         - name: "E0/1"
           ip: "192.168.0.1/30"
           description: "To R3 (Area 0)"
@@ -81,9 +88,9 @@ devices:
           description: "To R2 (Area 0)"
           ospf_area: 0
         - name: "E0/0"
-          ip: "192.168.61.2/30"
-          description: "To DLS1 (Area 61)"
-          ospf_area: 61
+          ip: "192.168.Y.2/30"
+          description: "To DLS1 (Area Y)"
+          ospf_area: "Y"
       routing:
         - protocol: "ospf"
           ospf:
@@ -92,18 +99,20 @@ devices:
             areas: []
       dhcp:
         pools:
-          - pool_name: "POOL-VLAN19"
-            network: "172.30.19.0/24"
-            default_router: "172.30.19.1"
+          - pool_name: "POOL-VLAN-W"
+            network: "172.30.W.0/24"
+            default_router: "172.30.W.254"
             dns_server: "8.8.8.8"
             excluded_addresses:
-              - "172.30.19.1 172.30.19.10"
-          - pool_name: "POOL-VLAN33"
-            network: "172.30.33.0/24"
-            default_router: "172.30.33.1"
+              - "172.30.W.1 172.30.W.10"
+              - "172.30.W.254"
+          - pool_name: "POOL-VLAN-X"
+            network: "172.30.X.0/24"
+            default_router: "172.30.X.254"
             dns_server: "8.8.8.8"
             excluded_addresses:
-              - "172.30.33.1 172.30.33.10"
+              - "172.30.X.1 172.30.X.10"
+              - "172.30.X.254"
 
   layer3_switches:
     DLS1:
@@ -113,26 +122,59 @@ devices:
         version: 2
       spanning_tree:
         mode: "rapid-pvst"
-        root_primary: ["19", "33"]
-        root_secondary: ["61", "85"]
+        root_primary: ["W", "X"]
+        root_secondary: ["Y", "Z"]
       interfaces:
         - name: "E0/0"
-          ip: "192.168.61.1/30"
-          description: "To R3 (Area 61)"
-          ospf_area: 61
-        - name: "E1/0"
-          type: "trunk"
-          description: "To ALS1"
+          ip: "192.168.Y.1/30"
+          description: "To R3 (Area Y)"
+          ospf_area: "Y"
       port_channels:
         - name: "Po1"
           protocol: "PAgP"
+          member_mode: "desirable"
           members: ["E0/1", "E0/2", "E0/3"]
           type: "trunk"
+          native_vlan: "Z"
+          allowed_vlans: ["W", "X", "Y", "Z"]
+      # Interfaces facing ALS1 (distribution-to-access trunks)
+      # ---- add more trunks here ----
+      svis:
+        - vlan_id: "W"
+          description: "SVI for VLAN NOMBRE-ALUMNO"
+          ip: "172.30.W.2/24"
+          helper_addresses: ["192.168.Y.2"]
+          ospf_area: "Y"
+          hsrp:
+            group: 19
+            ip: "172.30.W.254"
+            priority: 110
+            preempt: true
+        - vlan_id: "X"
+          description: "SVI for VLAN APELLIDO-ALUMNO"
+          ip: "172.30.X.2/24"
+          helper_addresses: ["192.168.Y.2"]
+          ospf_area: "Y"
+          hsrp:
+            group: 33
+            ip: "172.30.X.254"
+            priority: 110
+            preempt: true
+        - vlan_id: "Y"
+          description: "SVI for VLAN ADMIN"
+          ip: "172.30.Y.2/24"
+          ospf_area: "Y"
+          hsrp:
+            group: 61
+            ip: "172.30.Y.254"
+            priority: 110
+            preempt: true
       routing:
         - protocol: "ospf"
           ospf:
             process_id: 1
             router_id: "11.11.11.11"
+            passive_interfaces: ["Vlan19", "Vlan33", "Vlan61"]
             areas: []
 
     DLS2:
@@ -142,17 +184,53 @@ devices:
         version: 2
       spanning_tree:
         mode: "rapid-pvst"
-        root_secondary: ["19", "33"]
-        root_primary: ["61", "85"]
-      interfaces:
-        - name: "E1/1"
-          type: "trunk"
-          description: "To ALS1"
+        root_secondary: ["W", "X"]
+        root_primary: ["Y", "Z"]
       port_channels:
         - name: "Po1"
           protocol: "PAgP"
+          member_mode: "desirable"
           members: ["E0/1", "E0/2", "E0/3"]
           type: "trunk"
+          native_vlan: "Z"
+          allowed_vlans: ["W", "X", "Y", "Z"]
+      svis:
+        - vlan_id: "W"
+          description: "SVI for VLAN NOMBRE-ALUMNO (standby)"
+          ip: "172.30.W.3/24"
+          helper_addresses: ["192.168.Y.2"]
+          ospf_area: "Y"
+          hsrp:
+            group: 19
+            ip: "172.30.W.254"
+            priority: 100
+            preempt: true
+        - vlan_id: "X"
+          description: "SVI for VLAN APELLIDO-ALUMNO (standby)"
+          ip: "172.30.X.3/24"
+          helper_addresses: ["192.168.Y.2"]
+          ospf_area: "Y"
+          hsrp:
+            group: 33
+            ip: "172.30.X.254"
+            priority: 100
+            preempt: true
+        - vlan_id: "Y"
+          description: "SVI for VLAN ADMIN (standby)"
+          ip: "172.30.Y.3/24"
+          ospf_area: "Y"
+          hsrp:
+            group: 61
+            ip: "172.30.Y.254"
+            priority: 100
+            preempt: true
+      routing:
+        - protocol: "ospf"
+          ospf:
+            process_id: 1
+            router_id: "22.22.22.22"
+            passive_interfaces: ["Vlan19", "Vlan33", "Vlan61"]
+            areas: []
 
   layer2_switches:
     ALS1:
@@ -164,21 +242,25 @@ devices:
         - name: "E1/0"
           type: "trunk"
           description: "Trunk to DLS1"
+          native_vlan: "Z"
+          allowed_vlans: ["W", "X", "Y", "Z"]
         - name: "E1/1"
           type: "trunk"
           description: "Trunk to DLS2"
+          native_vlan: "Z"
+          allowed_vlans: ["W", "X", "Y", "Z"]
         - name: "E0/2"
           type: "access"
-          vlan: "19"
+          vlan: "W"
           description: "PC VLAN NOMBRE-ALUMNO"
         - name: "E0/3"
           type: "access"
-          vlan: "33"
+          vlan: "X"
           description: "PC VLAN APELLIDO-ALUMNO"
       spanning_tree:
         mode: "rapid-pvst"
-        portfast_default: true
-        bpduguard_default: true
+        portfast_default: false
+        bpduguard_default: false
 `;
 
 export const EXAMPLE_EIGRP_BGP = `topology_name: "EIGRP Core + iBGP Route Reflector"
@@ -192,6 +274,7 @@ devices:
       interfaces:
         - name: "Loopback0"
           ip: "10.0.0.1/32"
+          description: "Router-ID loopback"
         - name: "E0/0"
           ip: "10.1.0.1/30"
           description: "To R2"

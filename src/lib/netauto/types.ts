@@ -10,7 +10,19 @@ export interface VlanDef {
   vlan_id: string;           // may be a variable ref like "W"
   name: string;
   subnet?: string;           // e.g. "172.30.W.0/24"
-  svi_ip?: string;           // optional L3 SVI IP on the switch
+  /** Optional default gateway for the subnet (used by DHCP pool defaults) */
+  gateway?: string;
+}
+
+/** Per-device SVI (VLAN L3 interface) */
+export interface SviDef {
+  vlan_id: string;
+  ip?: string;               // e.g. "172.30.19.1/24"
+  description?: string;
+  helper_addresses?: string[];
+  hsrp?: HsrpConfig;
+  shutdown?: boolean;
+  ospf_area?: string | number;
 }
 
 // ----- ROUTING -----
@@ -169,6 +181,7 @@ export interface DeviceConfig {
   platform?: string;          // e.g. "cisco_ios", "cisco_nxos"
   interfaces?: InterfaceDef[];
   port_channels?: PortChannelDef[];
+  svis?: SviDef[];            // L3 switch VLAN interfaces
   routing?: RoutingProtocol[];
   services?: string[];        // legacy human-readable list
   dhcp?: DhcpConfig;

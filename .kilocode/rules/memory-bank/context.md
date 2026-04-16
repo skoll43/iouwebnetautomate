@@ -78,3 +78,20 @@ To add a new protocol:
 |------|---------|
 | Initial | Template created with base setup |
 | 2026-04-16 | Built full NetAutoGen network automation tool |
+| 2026-04-16 | Fixed dark theme Tailwind v4 preflight conflicts |
+| 2026-04-16 | Major config-correctness audit & fixes: /32 mask, static route newline, DHCP indent, native VLAN, nonegotiate, SVIs with HSRP, L3 switch routed-interface `no switchport`, ospf_area on SVIs, port-channel member switchport, bpduguard per-port |
+
+## Config Correctness Checklist (verified)
+
+- ✅ `/32` → `255.255.255.255` (fixed JS `>>> 32` quirk)
+- ✅ Static routes terminated with `\n` before `!` separator
+- ✅ DHCP pool sub-commands have single-space indent
+- ✅ Trunk ports include `switchport nonegotiate` + `switchport trunk native vlan`
+- ✅ Access ports include per-port `spanning-tree portfast` + `bpduguard enable`
+- ✅ L3 switch routed interfaces get `no switchport` before `ip address`
+- ✅ SVIs render with HSRP, helper-address, and OSPF integration
+- ✅ Port-channel members include `switchport` before `channel-group`
+- ✅ PAgP `desirable↔desirable` and LACP `active↔active` supported
+- ✅ HSRP primary/standby priorities (110/100) with preempt
+- ✅ SVI networks auto-advertised into OSPF via `ospf_area` on SviDef
+- ✅ Variable placeholders (W/X/Y/Z) resolve inside `native_vlan`, `allowed_vlans`, `ospf_area`

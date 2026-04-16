@@ -1,51 +1,80 @@
 // ============================================================
 // Jinja2/Nunjucks Partial Templates (reusable blocks)
 // Nunjucks-compatible syntax (trimBlocks + lstripBlocks enabled)
-// Each partial starts/ends cleanly with no trailing blank lines.
 // ============================================================
 
-// ----- INTERFACES -----
+// ----- INTERFACES (L3 routed + L2 access/trunk) -----
 export const INTERFACES_PARTIAL = `{% for iface in interfaces %}
 !
 interface {{ iface.name | expand_iface }}
 {% if iface.description %} description {{ iface.description }}
-{% endif %}{% if iface.type == "loopback" %} no shutdown
- ip address {{ iface.ip | cidr_to_mask }}
+{% endif %}{% if iface.type == "loopback" or (iface.name | lower).indexOf("lo") == 0 %} ip address {{ iface.ip | cidr_to_mask }}
+ no shutdown
 {% elif iface.type == "trunk" %} switchport trunk encapsulation dot1q
  switchport mode trunk
-{% if iface.native_vlan %}  switchport trunk native vlan {{ iface.native_vlan }}
-{% endif %}{% if iface.allowed_vlans %}  switchport trunk allowed vlan {{ iface.allowed_vlans | join(",") }}
+ switchport nonegotiate
+{% if iface.native_vlan %} switchport trunk native vlan {{ iface.native_vlan }}
+{% endif %}{% if iface.allowed_vlans %} switchport trunk allowed vlan {{ iface.allowed_vlans | join(",") }}
 {% endif %} no shutdown
 {% elif iface.type == "access" %} switchport mode access
  switchport access vlan {{ iface.vlan }}
+ switchport nonegotiate
  spanning-tree portfast
+ spanning-tree bpduguard enable
  no shutdown
-{% else %}{% if iface.ip %} ip address {{ iface.ip | cidr_to_mask }}
+{% else %}{% if role == "l3_switch" %} no switchport
+{% endif %}{% if iface.ip %} ip address {{ iface.ip | cidr_to_mask }}
 {% endif %}{% if iface.helper_addresses %}{% for helper in iface.helper_addresses %} ip helper-address {{ helper }}
 {% endfor %}{% endif %}{% if iface.ospf_area is not undefined and iface.ospf_area !== null %} ip ospf 1 area {{ iface.ospf_area }}
-{% if iface.ospf_cost %}  ip ospf cost {{ iface.ospf_cost }}
-{% endif %}{% if iface.ospf_priority is not undefined %}  ip ospf priority {{ iface.ospf_priority }}
+{% if iface.ospf_cost %} ip ospf cost {{ iface.ospf_cost }}
+{% endif %}{% if iface.ospf_priority is not undefined %} ip ospf priority {{ iface.ospf_priority }}
 {% endif %}{% endif %}{% if iface.channel_group is not undefined %} channel-group {{ iface.channel_group }} mode {{ iface.channel_group_mode if iface.channel_group_mode else "desirable" }}
-{% endif %}{% if iface.hsrp %} standby {{ iface.hsrp.group }} ip {{ iface.hsrp.ip }}
-{% if iface.hsrp.priority %}  standby {{ iface.hsrp.group }} priority {{ iface.hsrp.priority }}
-{% endif %}{% if iface.hsrp.preempt %}  standby {{ iface.hsrp.group }} preempt
+{% endif %}{% if iface.hsrp %} standby version {{ iface.hsrp.version if iface.hsrp.version else 2 }}
+ standby {{ iface.hsrp.group }} ip {{ iface.hsrp.ip }}
+{% if iface.hsrp.priority %} standby {{ iface.hsrp.group }} priority {{ iface.hsrp.priority }}
+{% endif %}{% if iface.hsrp.preempt %} standby {{ iface.hsrp.group }} preempt
 {% endif %}{% endif %}{% if iface.shutdown %} shutdown
 {% else %} no shutdown
 {% endif %}{% endif %}{% endfor %}`.trim();
 
+// ----- SVI (L3 VLAN interfaces) -----
+export const SVI_PARTIAL = `{% for svi in svis %}
+!
+interface Vlan{{ svi.vlan_id }}
+{% if svi.description %} description {{ svi.description }}
+{% endif %}{% if svi.ip %} ip address {{ svi.ip | cidr_to_mask }}
+{% endif %}{% if svi.helper_addresses %}{% for helper in svi.helper_addresses %} ip helper-address {{ helper }}
+{% endfor %}{% endif %}{% if svi.hsrp %} standby version {{ svi.hsrp.version if svi.hsrp.version else 2 }}
+ standby {{ svi.hsrp.group }} ip {{ svi.hsrp.ip }}
+{% if svi.hsrp.priority %} standby {{ svi.hsrp.group }} priority {{ svi.hsrp.priority }}
+{% endif %}{% if svi.hsrp.preempt %} standby {{ svi.hsrp.group }} preempt
+{% endif %}{% endif %}{% if svi.shutdown %} shutdown
+{% else %} no shutdown
+{% endif %}{% endfor %}`.trim();
+
 // ----- PORT CHANNELS -----
+// The logical Port-channel interface, then each member gets a switchport
+// statement + channel-group with the correct PAgP/LACP mode.
 export const PORT_CHANNELS_PARTIAL = `{% for pc in port_channels %}
 !
 interface {{ pc.name | expand_iface }}
+ switchport
 {% if pc.type == "trunk" %} switchport trunk encapsulation dot1q
  switchport mode trunk
-{% if pc.native_vlan %}  switchport trunk native vlan {{ pc.native_vlan }}
-{% endif %}{% if pc.allowed_vlans %}  switchport trunk allowed vlan {{ pc.allowed_vlans | join(",") }}
+ switchport nonegotiate
+{% if pc.native_vlan %} switchport trunk native vlan {{ pc.native_vlan }}
+{% endif %}{% if pc.allowed_vlans %} switchport trunk allowed vlan {{ pc.allowed_vlans | join(",") }}
+{% endif %}{% elif pc.type == "access" %} switchport mode access
+{% if pc.access_vlan %} switchport access vlan {{ pc.access_vlan }}
 {% endif %}{% endif %} no shutdown
-{% endfor %}{% for pc in port_channels %}{% set pcnum = pc.name | replace("Po","") %}{% set proto = pc.protocol if pc.protocol else "PAgP" %}{% set chmode = "active" if proto == "LACP" else ("on" if proto == "static" else "desirable") %}{% for member in pc.members %}
+{% endfor %}{% for pc in port_channels %}{% set pcnum = pc.name | replace("Po","") %}{% set proto = (pc.protocol | upper) if pc.protocol else "PAGP" %}{% set defmode = "active" if proto == "LACP" else ("on" if proto == "STATIC" else "desirable") %}{% set chmode = pc.member_mode if pc.member_mode else defmode %}{% for member in pc.members %}
 !
 interface {{ member | expand_iface }}
- channel-group {{ pcnum }} mode {{ chmode }}
+ switchport
+{% if pc.type == "trunk" %} switchport trunk encapsulation dot1q
+ switchport mode trunk
+{% if pc.native_vlan %} switchport trunk native vlan {{ pc.native_vlan }}
+{% endif %}{% endif %} channel-group {{ pcnum }} mode {{ chmode }}
  no shutdown
 {% endfor %}{% endfor %}`.trim();
 
@@ -81,28 +110,28 @@ export const BGP_PARTIAL = `{% for rp in routing %}{% if rp.protocol == "bgp" %}
 router bgp {{ rp.bgp.as_number }}
 {% if rp.bgp.router_id %} bgp router-id {{ rp.bgp.router_id }}
 {% endif %}{% for nbr in rp.bgp.neighbors %} neighbor {{ nbr.ip }} remote-as {{ nbr.remote_as }}
-{% if nbr.description %}  neighbor {{ nbr.ip }} description {{ nbr.description }}
-{% endif %}{% if nbr.update_source %}  neighbor {{ nbr.ip }} update-source {{ nbr.update_source }}
-{% endif %}{% if nbr.next_hop_self %}  neighbor {{ nbr.ip }} next-hop-self
+{% if nbr.description %} neighbor {{ nbr.ip }} description {{ nbr.description }}
+{% endif %}{% if nbr.update_source %} neighbor {{ nbr.ip }} update-source {{ nbr.update_source }}
+{% endif %}{% if nbr.next_hop_self %} neighbor {{ nbr.ip }} next-hop-self
 {% endif %}{% endfor %}{% if rp.bgp.networks %}{% for net in rp.bgp.networks %} network {{ net }}
 {% endfor %}{% endif %}{% if rp.bgp.redistribute %}{% for rd in rp.bgp.redistribute %} redistribute {{ rd.protocol }}{% if rd.metric %} metric {{ rd.metric }}{% endif %}
 {% endfor %}{% endif %}{% endif %}{% endfor %}`.trim();
 
 // ----- STATIC ROUTES -----
-export const STATIC_ROUTES_PARTIAL = `{% for rp in routing %}{% if rp.protocol == "static" %}{% for route in rp.routes %}
-ip route {{ route.prefix | cidr_to_mask }} {{ route.next_hop }}{% if route.ad %} {{ route.ad }}{% endif %}{% if route.description %} name {{ route.description }}{% endif %}
+export const STATIC_ROUTES_PARTIAL = `{% for rp in routing %}{% if rp.protocol == "static" %}{% for route in rp.routes %}ip route {{ route.prefix | cidr_to_mask }} {{ route.next_hop }}{% if route.ad %} {{ route.ad }}{% endif %}{% if route.description %} name {{ route.description }}{% endif %}
+
 {% endfor %}{% endif %}{% endfor %}`.trim();
 
 // ----- DHCP -----
-export const DHCP_PARTIAL = `{% if dhcp %}{% for pool in dhcp.pools %}{% if pool.excluded_addresses %}{% for excl in pool.excluded_addresses %}
-ip dhcp excluded-address {{ excl }}
+export const DHCP_PARTIAL = `{% if dhcp %}{% for pool in dhcp.pools %}{% if pool.excluded_addresses %}{% for excl in pool.excluded_addresses %}ip dhcp excluded-address {{ excl }}
 {% endfor %}{% endif %}{% endfor %}{% for pool in dhcp.pools %}
 !
 ip dhcp pool {{ pool.pool_name }}
  network {{ pool.network | cidr_to_mask }}
-{% if pool.default_router %}  default-router {{ pool.default_router }}
-{% endif %}{% if pool.dns_server %}  dns-server {{ pool.dns_server }}
-{% endif %}{% if pool.lease_days %}  lease {{ pool.lease_days }}
+{% if pool.default_router %} default-router {{ pool.default_router }}
+{% endif %}{% if pool.dns_server %} dns-server {{ pool.dns_server }}
+{% endif %}{% if pool.domain %} domain-name {{ pool.domain }}
+{% endif %}{% if pool.lease_days %} lease {{ pool.lease_days }}
 {% endif %}{% endfor %}{% endif %}`.trim();
 
 // ----- SPANNING TREE -----

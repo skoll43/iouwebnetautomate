@@ -73,8 +73,8 @@ export function deviceVlans(device: NormalizedDevice): Array<{ id: string; name:
 }
 
 /**
- * Infer the OSPF area for an interface from the global topology
- * when the device has an ospf_area annotation.
+ * Aggregate all OSPF network/area statements to inject into the OSPF router
+ * block, derived from per-interface and per-SVI ospf_area annotations.
  */
 export function ospfNetworksForDevice(
   device: NormalizedDevice
@@ -83,11 +83,18 @@ export function ospfNetworksForDevice(
 
   for (const iface of device.config.interfaces ?? []) {
     if (iface.ospf_area !== undefined && iface.ip) {
-      const cidr = iface.ip;
-      const { network, wildcard } = cidrToOspfNetwork(cidr);
+      const { network, wildcard } = cidrToOspfNetwork(iface.ip);
       result.push({ network, wildcard, area: iface.ospf_area });
     }
   }
+
+  for (const svi of device.config.svis ?? []) {
+    if (svi.ospf_area !== undefined && svi.ip) {
+      const { network, wildcard } = cidrToOspfNetwork(svi.ip);
+      result.push({ network, wildcard, area: svi.ospf_area });
+    }
+  }
+
   return result;
 }
 
@@ -96,12 +103,16 @@ export function cidrToOspfNetwork(cidr: string): { network: string; wildcard: st
   const [ip, prefixStr] = cidr.split("/");
   if (!prefixStr) return { network: ip, wildcard: "0.0.0.0" };
   const prefix = parseInt(prefixStr, 10);
-  const mask = ~(0xffffffff >>> prefix) >>> 0;
+  // Avoid the >>> 32 identity quirk in JS
+  let mask = 0;
+  if (prefix >= 32) mask = 0xffffffff;
+  else if (prefix > 0) mask = (0xffffffff << (32 - prefix)) >>> 0;
+  const wildcardMask = (~mask) >>> 0;
   const wildcard = [
-    ((~mask >>> 24) & 0xff),
-    ((~mask >>> 16) & 0xff),
-    ((~mask >>> 8) & 0xff),
-    (~mask & 0xff),
+    (wildcardMask >>> 24) & 0xff,
+    (wildcardMask >>> 16) & 0xff,
+    (wildcardMask >>> 8) & 0xff,
+    wildcardMask & 0xff,
   ].join(".");
   const netInt = ipToInt(ip) & mask;
   return { network: intToIp(netInt), wildcard };

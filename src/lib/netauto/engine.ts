@@ -20,7 +20,10 @@ env.addFilter("cidr_to_mask", (cidr: string) => {
   if (!cidr || !cidr.includes("/")) return cidr;
   const [ip, prefixStr] = cidr.split("/");
   const prefix = parseInt(prefixStr, 10);
-  const mask = prefix === 0 ? 0 : (~(0xffffffff >>> prefix)) >>> 0;
+  // Build mask avoiding >>> 32 quirk in JS (shift counts are mod 32).
+  let mask = 0;
+  if (prefix >= 32) mask = 0xffffffff;
+  else if (prefix > 0) mask = (0xffffffff << (32 - prefix)) >>> 0;
   const maskStr = [(mask >>> 24) & 0xff, (mask >>> 16) & 0xff, (mask >>> 8) & 0xff, mask & 0xff].join(".");
   return `${ip} ${maskStr}`;
 });
@@ -66,6 +69,7 @@ export function buildContext(device: NormalizedDevice) {
     platform: device.platform,
     interfaces: device.config.interfaces ?? [],
     port_channels: device.config.port_channels ?? [],
+    svis: device.config.svis ?? [],
     routing: device.config.routing ?? [],
     dhcp: device.config.dhcp ?? null,
     ntp: device.config.ntp ?? null,
