@@ -128,7 +128,7 @@ export default function NetAutoApp() {
   const activeResult = results.find((r) => r.device === activeDevice);
 
   return (
-    <div className="flex flex-col min-h-screen" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
+    <div className="flex flex-col min-h-screen" style={{ background: "#0d1117", color: "#e6edf3" }}>
       {/* ── Header ── */}
       <header
         style={{ background: "var(--bg-secondary)", borderBottom: "1px solid var(--border)" }}
