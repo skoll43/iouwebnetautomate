@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { EXAMPLE_MULTI_AREA_OSPF, EXAMPLE_EIGRP_BGP, EXAMPLE_MST } from "@/lib/netauto/examples";
+import Explainer from "./Explainer";
 
 type RenderResult = {
   device: string;
@@ -79,6 +80,17 @@ export default function NetAutoApp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [showExplainer, setShowExplainer] = useState(false);
+
+  // Esc closes the explainer
+  useEffect(() => {
+    if (!showExplainer) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowExplainer(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showExplainer]);
 
   const handleRender = useCallback(async () => {
     setLoading(true);
@@ -154,10 +166,47 @@ export default function NetAutoApp() {
             </span>
           </div>
         </div>
-        <div className="ml-auto text-xs" style={{ color: "var(--text-secondary)", fontFamily: "sans-serif" }}>
-          YAML Topology → Jinja2 → Device Configs
+        <div className="ml-auto flex items-center gap-3">
+          <div className="text-xs hidden md:block" style={{ color: "var(--text-secondary)", fontFamily: "sans-serif" }}>
+            YAML Topology → Jinja2 → Device Configs
+          </div>
+          <button
+            onClick={() => setShowExplainer(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded cursor-pointer transition-all"
+            style={{
+              background: "#21262d",
+              border: "1px solid #58a6ff",
+              color: "#58a6ff",
+              fontFamily: "sans-serif",
+              fontWeight: 600,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "#1f6feb";
+              (e.currentTarget as HTMLElement).style.color = "#ffffff";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "#21262d";
+              (e.currentTarget as HTMLElement).style.color = "#58a6ff";
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+              <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            Reference
+          </button>
         </div>
       </header>
+
+      {showExplainer && (
+        <Explainer
+          onClose={() => setShowExplainer(false)}
+          onLoadExample={(yaml) => {
+            setYamlInput(yaml);
+            setShowExplainer(false);
+          }}
+        />
+      )}
 
       {/* ── Main layout ── */}
       <div className="flex flex-1 overflow-hidden" style={{ height: "calc(100vh - 53px)" }}>
