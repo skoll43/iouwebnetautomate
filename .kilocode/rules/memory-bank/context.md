@@ -80,6 +80,7 @@ To add a new protocol:
 | 2026-04-16 | Built full NetAutoGen network automation tool |
 | 2026-04-16 | Fixed dark theme Tailwind v4 preflight conflicts |
 | 2026-04-16 | Major config-correctness audit & fixes: /32 mask, static route newline, DHCP indent, native VLAN, nonegotiate, SVIs with HSRP, L3 switch routed-interface `no switchport`, ospf_area on SVIs, port-channel member switchport, bpduguard per-port |
+| 2026-04-16 | Added MST support: MstConfig + MstInstance types, region/revision/instance mappings, per-instance root role + explicit priority + timers; new EXAMPLE_MST topology; `spanning-tree extend system-id` emitted by default; vlan_priorities override field for PVST |
 
 ## Config Correctness Checklist (verified)
 

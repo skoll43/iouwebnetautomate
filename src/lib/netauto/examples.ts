@@ -355,3 +355,153 @@ devices:
                 remote_as: 65001
                 update_source: "Loopback0"
 `;
+
+// ============================================================
+// MST (Multiple Spanning Tree) example
+// Two MST instances:
+//   - MST 1  → data VLANs (W, X)  → DLS1 root
+//   - MST 2  → mgmt VLANs (Y, Z)  → DLS2 root
+// ============================================================
+export const EXAMPLE_MST = `topology_name: "MST (Multiple Spanning Tree) Campus Core"
+
+variables:
+  W: "19"
+  X: "33"
+  Y: "61"
+  Z: "85"
+
+vlans:
+  - vlan_id: "W"
+    name: "DATA-A"
+    subnet: "172.30.W.0/24"
+  - vlan_id: "X"
+    name: "DATA-B"
+    subnet: "172.30.X.0/24"
+  - vlan_id: "Y"
+    name: "ADMIN"
+    subnet: "172.30.Y.0/24"
+  - vlan_id: "Z"
+    name: "NATIVA"
+    subnet: "172.30.Z.0/24"
+
+devices:
+  layer3_switches:
+    DLS1:
+      vtp:
+        mode: "server"
+        domain: "LABORATORIO"
+        version: 2
+      spanning_tree:
+        mode: "mst"
+        extend_system_id: true
+        mst:
+          region_name: "CAMPUS"
+          revision: 1
+          max_hops: 20
+          instances:
+            # IST (instance 0) is implicit and carries all unmapped VLANs.
+            # MST 1: data VLANs — DLS1 is root
+            - instance_id: 1
+              vlans: ["W", "X"]
+              root: "primary"
+            # MST 2: mgmt VLANs — DLS1 is backup root
+            - instance_id: 2
+              vlans: ["Y", "Z"]
+              root: "secondary"
+      port_channels:
+        - name: "Po1"
+          protocol: "LACP"
+          member_mode: "active"
+          members: ["E0/1", "E0/2"]
+          type: "trunk"
+          native_vlan: "Z"
+          allowed_vlans: ["W", "X", "Y", "Z"]
+      svis:
+        - vlan_id: "W"
+          ip: "172.30.W.2/24"
+          hsrp: { group: 19, ip: "172.30.W.254", priority: 110, preempt: true }
+        - vlan_id: "X"
+          ip: "172.30.X.2/24"
+          hsrp: { group: 33, ip: "172.30.X.254", priority: 110, preempt: true }
+        - vlan_id: "Y"
+          ip: "172.30.Y.2/24"
+          hsrp: { group: 61, ip: "172.30.Y.254", priority: 100, preempt: true }
+
+    DLS2:
+      vtp:
+        mode: "server"
+        domain: "LABORATORIO"
+        version: 2
+      spanning_tree:
+        mode: "mst"
+        extend_system_id: true
+        mst:
+          region_name: "CAMPUS"
+          revision: 1
+          max_hops: 20
+          instances:
+            # Symmetric mapping — MUST match DLS1 exactly for MST to converge
+            - instance_id: 1
+              vlans: ["W", "X"]
+              root: "secondary"
+            - instance_id: 2
+              vlans: ["Y", "Z"]
+              root: "primary"
+      port_channels:
+        - name: "Po1"
+          protocol: "LACP"
+          member_mode: "active"
+          members: ["E0/1", "E0/2"]
+          type: "trunk"
+          native_vlan: "Z"
+          allowed_vlans: ["W", "X", "Y", "Z"]
+      svis:
+        - vlan_id: "W"
+          ip: "172.30.W.3/24"
+          hsrp: { group: 19, ip: "172.30.W.254", priority: 100, preempt: true }
+        - vlan_id: "X"
+          ip: "172.30.X.3/24"
+          hsrp: { group: 33, ip: "172.30.X.254", priority: 100, preempt: true }
+        - vlan_id: "Y"
+          ip: "172.30.Y.3/24"
+          hsrp: { group: 61, ip: "172.30.Y.254", priority: 110, preempt: true }
+
+  layer2_switches:
+    ALS1:
+      vtp:
+        mode: "client"
+        domain: "LABORATORIO"
+        version: 2
+      spanning_tree:
+        mode: "mst"
+        extend_system_id: true
+        # Access switch MUST share the same region config to join the region.
+        mst:
+          region_name: "CAMPUS"
+          revision: 1
+          instances:
+            - instance_id: 1
+              vlans: ["W", "X"]
+            - instance_id: 2
+              vlans: ["Y", "Z"]
+      interfaces:
+        - name: "E1/0"
+          type: "trunk"
+          description: "Trunk to DLS1"
+          native_vlan: "Z"
+          allowed_vlans: ["W", "X", "Y", "Z"]
+        - name: "E1/1"
+          type: "trunk"
+          description: "Trunk to DLS2"
+          native_vlan: "Z"
+          allowed_vlans: ["W", "X", "Y", "Z"]
+        - name: "E0/2"
+          type: "access"
+          vlan: "W"
+          description: "Host VLAN W"
+        - name: "E0/3"
+          type: "access"
+          vlan: "X"
+          description: "Host VLAN X"
+`;
+

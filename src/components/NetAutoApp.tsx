@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { EXAMPLE_MULTI_AREA_OSPF, EXAMPLE_EIGRP_BGP } from "@/lib/netauto/examples";
+import { EXAMPLE_MULTI_AREA_OSPF, EXAMPLE_EIGRP_BGP, EXAMPLE_MST } from "@/lib/netauto/examples";
 
 type RenderResult = {
   device: string;
@@ -67,8 +67,9 @@ function escHtml(str: string): string {
 }
 
 const EXAMPLES = [
-  { label: "Multi-Area OSPF + L2/L3 Switching", yaml: EXAMPLE_MULTI_AREA_OSPF },
-  { label: "EIGRP Core + iBGP Route Reflector", yaml: EXAMPLE_EIGRP_BGP },
+  { label: "Multi-Area OSPF + L2/L3", yaml: EXAMPLE_MULTI_AREA_OSPF },
+  { label: "MST Campus Core", yaml: EXAMPLE_MST },
+  { label: "EIGRP + iBGP RR", yaml: EXAMPLE_EIGRP_BGP },
 ];
 
 export default function NetAutoApp() {
@@ -235,8 +236,11 @@ export default function NetAutoApp() {
                 { label: "EIGRP", color: "#3fb950" },
                 { label: "BGP", color: "#bc8cff" },
                 { label: "Static", color: "#d29922" },
-                { label: "STP/RSTP", color: "#39c5cf" },
+                { label: "PVST/RSTP", color: "#39c5cf" },
+                { label: "MST", color: "#79c0ff" },
                 { label: "HSRP", color: "#f85149" },
+                { label: "SVI", color: "#d2a8ff" },
+                { label: "VTP", color: "#7ee787" },
                 { label: "DHCP", color: "#ff7b72" },
                 { label: "PAgP/LACP", color: "#a5f3fc" },
                 { label: "SSH/AAA", color: "#f0883e" },

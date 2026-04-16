@@ -163,12 +163,44 @@ export interface SshConfig {
   local_users?: { username: string; privilege?: number; secret: string }[];
 }
 
+/** One MST instance → set of VLANs + optional root role/priority */
+export interface MstInstance {
+  instance_id: number;        // 0 = IST; 1..4094 = MSTI
+  vlans: string[];            // VLAN ids mapped to this instance (supports ranges like "10-20")
+  root?: "primary" | "secondary";
+  priority?: number;          // explicit bridge priority (multiple of 4096)
+  hello_time?: number;
+  forward_time?: number;
+  max_age?: number;
+}
+
+export interface MstConfig {
+  /** MST region name – must match on all switches in the region */
+  region_name: string;
+  /** Configuration revision number – must match on all switches in the region */
+  revision: number;
+  /** Instance-to-VLAN mappings and per-instance role/priority */
+  instances: MstInstance[];
+  /** Optional global MST timers (rarely changed) */
+  max_hops?: number;          // default 20
+  hello_time?: number;        // seconds
+  forward_time?: number;
+  max_age?: number;
+}
+
 export interface SpanningTreeConfig {
   mode?: "pvst" | "rapid-pvst" | "mst";
-  root_primary?: string[];    // vlan ids
+  /** For pvst / rapid-pvst: VLAN ids where this switch is root */
+  root_primary?: string[];
   root_secondary?: string[];
+  /** Explicit per-VLAN priority override for pvst / rapid-pvst */
+  vlan_priorities?: Array<{ vlan: string; priority: number }>;
   portfast_default?: boolean;
   bpduguard_default?: boolean;
+  /** MST-specific block (only used when mode == "mst") */
+  mst?: MstConfig;
+  /** Extend system-id (default true for 802.1t compliance) */
+  extend_system_id?: boolean;
 }
 
 // ----- DEVICE -----

@@ -135,11 +135,31 @@ ip dhcp pool {{ pool.pool_name }}
 {% endif %}{% endfor %}{% endif %}`.trim();
 
 // ----- SPANNING TREE -----
-export const STP_PARTIAL = `{% if spanning_tree %}
-spanning-tree mode {{ spanning_tree.mode if spanning_tree.mode else "rapid-pvst" }}
-{% if spanning_tree.root_primary %}{% for vl in spanning_tree.root_primary %}spanning-tree vlan {{ vl }} root primary
+// Supports PVST / Rapid-PVST (per-VLAN root priorities) and MST
+// (region name + revision + instance-to-VLAN mappings + per-instance
+// root role / explicit priority / optional timers).
+export const STP_PARTIAL = `{% if spanning_tree %}{% set stp_mode = spanning_tree.mode if spanning_tree.mode else "rapid-pvst" %}
+spanning-tree mode {{ stp_mode }}
+{% if spanning_tree.extend_system_id !== false %}spanning-tree extend system-id
+{% endif %}{% if stp_mode == "mst" and spanning_tree.mst %}!
+spanning-tree mst configuration
+ name {{ spanning_tree.mst.region_name }}
+ revision {{ spanning_tree.mst.revision }}
+{% for inst in spanning_tree.mst.instances %}{% if inst.instance_id != 0 %} instance {{ inst.instance_id }} vlan {{ inst.vlans | join(",") }}
+{% endif %}{% endfor %}exit
+{% if spanning_tree.mst.max_hops %}spanning-tree mst max-hops {{ spanning_tree.mst.max_hops }}
+{% endif %}{% if spanning_tree.mst.hello_time %}spanning-tree mst hello-time {{ spanning_tree.mst.hello_time }}
+{% endif %}{% if spanning_tree.mst.forward_time %}spanning-tree mst forward-time {{ spanning_tree.mst.forward_time }}
+{% endif %}{% if spanning_tree.mst.max_age %}spanning-tree mst max-age {{ spanning_tree.mst.max_age }}
+{% endif %}{% for inst in spanning_tree.mst.instances %}{% if inst.root %}spanning-tree mst {{ inst.instance_id }} root {{ inst.root }}
+{% endif %}{% if inst.priority is not undefined %}spanning-tree mst {{ inst.instance_id }} priority {{ inst.priority }}
+{% endif %}{% if inst.hello_time %}spanning-tree mst {{ inst.instance_id }} hello-time {{ inst.hello_time }}
+{% endif %}{% if inst.forward_time %}spanning-tree mst {{ inst.instance_id }} forward-time {{ inst.forward_time }}
+{% endif %}{% if inst.max_age %}spanning-tree mst {{ inst.instance_id }} max-age {{ inst.max_age }}
+{% endif %}{% endfor %}{% else %}{% if spanning_tree.root_primary %}{% for vl in spanning_tree.root_primary %}spanning-tree vlan {{ vl }} root primary
 {% endfor %}{% endif %}{% if spanning_tree.root_secondary %}{% for vl in spanning_tree.root_secondary %}spanning-tree vlan {{ vl }} root secondary
-{% endfor %}{% endif %}{% if spanning_tree.portfast_default %}spanning-tree portfast default
+{% endfor %}{% endif %}{% if spanning_tree.vlan_priorities %}{% for vp in spanning_tree.vlan_priorities %}spanning-tree vlan {{ vp.vlan }} priority {{ vp.priority }}
+{% endfor %}{% endif %}{% endif %}{% if spanning_tree.portfast_default %}spanning-tree portfast default
 {% endif %}{% if spanning_tree.bpduguard_default %}spanning-tree portfast bpduguard default
 {% endif %}{% endif %}`.trim();
 
