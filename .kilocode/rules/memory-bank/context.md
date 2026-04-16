@@ -1,87 +1,80 @@
-# Active Context: Next.js Starter Template
+# Active Context: NetAutoGen — Cisco Config Generator
 
 ## Current State
 
-**Template Status**: ✅ Ready for development
+**Project Status**: ✅ NetAutoGen network automation tool built on top of Next.js template
 
-The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. It's ready for AI-assisted expansion to build any type of application.
+The application converts abstract YAML topology definitions into Cisco IOS device configurations
+using a Nunjucks (Jinja2-compatible) template engine with multi-protocol support.
 
 ## Recently Completed
 
-- [x] Base Next.js 16 setup with App Router
-- [x] TypeScript configuration with strict mode
-- [x] Tailwind CSS 4 integration
-- [x] ESLint configuration
-- [x] Memory bank documentation
-- [x] Recipe system for common features
+- [x] Extensible YAML topology schema (`src/lib/netauto/types.ts`)
+- [x] Variable resolver for W/X/Y/Z placeholder interpolation (`resolver.ts`)
+- [x] Topology normalizer with role detection + OSPF network derivation (`normalizer.ts`)
+- [x] Nunjucks rendering engine with custom IOS filters (`engine.ts`)
+- [x] Partial templates for all supported protocols/features (`templates/partials.ts`)
+- [x] Template registry mapping DeviceRole → full config template (`templates/registry.ts`)
+- [x] Two built-in example topologies (`examples.ts`)
+- [x] POST `/api/render` route
+- [x] Interactive Next.js UI with IOS syntax highlighting (`NetAutoApp.tsx`)
+- [x] Dark theme styled for terminal/network engineer UX
 
 ## Current Structure
 
 | File/Directory | Purpose | Status |
 |----------------|---------|--------|
-| `src/app/page.tsx` | Home page | ✅ Ready |
-| `src/app/layout.tsx` | Root layout | ✅ Ready |
-| `src/app/globals.css` | Global styles | ✅ Ready |
-| `.kilocode/` | AI context & recipes | ✅ Ready |
+| `src/lib/netauto/types.ts` | TypeScript interfaces for full topology schema | ✅ |
+| `src/lib/netauto/resolver.ts` | Variable placeholder resolution | ✅ |
+| `src/lib/netauto/normalizer.ts` | Topology normalization, OSPF helper math | ✅ |
+| `src/lib/netauto/engine.ts` | Nunjucks render engine + custom filters | ✅ |
+| `src/lib/netauto/templates/partials.ts` | All Nunjucks partial templates | ✅ |
+| `src/lib/netauto/templates/registry.ts` | Per-role full config templates | ✅ |
+| `src/lib/netauto/examples.ts` | Built-in example YAML topologies | ✅ |
+| `src/lib/netauto/index.ts` | Public API (`renderTopology`) | ✅ |
+| `src/app/api/render/route.ts` | POST /api/render endpoint | ✅ |
+| `src/components/NetAutoApp.tsx` | Main interactive UI (client component) | ✅ |
+| `src/app/page.tsx` | Home page | ✅ |
 
-## Current Focus
+## Architecture
 
-The template is ready. Next steps depend on user requirements:
-
-1. What type of application to build
-2. What features are needed
-3. Design/branding preferences
-
-## Quick Start Guide
-
-### To add a new page:
-
-Create a file at `src/app/[route]/page.tsx`:
-```tsx
-export default function NewPage() {
-  return <div>New page content</div>;
-}
+```
+YAML string
+  ↓ js-yaml parse
+TopologyDef (raw)
+  ↓ resolveVars() — replace W/X/Y/Z everywhere
+TopologyDef (resolved)
+  ↓ normalizeTopology() — split into NormalizedDevice[]
+NormalizedDevice[]
+  ↓ renderDevice() per device — Nunjucks + TEMPLATES[role]
+RenderResult[] — { device, role, config }
 ```
 
-### To add components:
+## Supported Protocols / Features
 
-Create `src/components/` directory and add components:
-```tsx
-// src/components/ui/Button.tsx
-export function Button({ children }: { children: React.ReactNode }) {
-  return <button className="px-4 py-2 bg-blue-600 text-white rounded">{children}</button>;
-}
-```
+- **Routing**: OSPF (multi-area), EIGRP, BGP (iBGP/eBGP), Static routes
+- **L2**: VLANs, STP/RSTP, VTP, Trunk/Access ports
+- **Port Channels**: PAgP (desirable), LACP (active), Static (on)
+- **Services**: DHCP server (pools + excluded), NTP, SSH/AAA
+- **Redundancy**: HSRP (standby groups, priority, preempt)
+- **Variable system**: Abstract labels (W/X/Y/Z) resolved before render
 
-### To add a database:
+## Extensibility Points
 
-Follow `.kilocode/recipes/add-database.md`
+To add a new protocol:
+1. Add type in `types.ts`
+2. Write a partial in `templates/partials.ts`
+3. Import + inject it into the relevant role template in `templates/registry.ts`
 
-### To add API routes:
+## Dependencies Added
 
-Create `src/app/api/[route]/route.ts`:
-```tsx
-import { NextResponse } from "next/server";
-
-export async function GET() {
-  return NextResponse.json({ message: "Hello" });
-}
-```
-
-## Available Recipes
-
-| Recipe | File | Use Case |
-|--------|------|----------|
-| Add Database | `.kilocode/recipes/add-database.md` | Data persistence with Drizzle + SQLite |
-
-## Pending Improvements
-
-- [ ] Add more recipes (auth, email, etc.)
-- [ ] Add example components
-- [ ] Add testing setup recipe
+- `js-yaml` — YAML parsing
+- `nunjucks` — Jinja2-compatible templating
+- `@types/js-yaml`, `@types/nunjucks` — TypeScript types
 
 ## Session History
 
 | Date | Changes |
 |------|---------|
 | Initial | Template created with base setup |
+| 2026-04-16 | Built full NetAutoGen network automation tool |
