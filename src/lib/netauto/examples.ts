@@ -331,6 +331,9 @@ devices:
         - vlan_id: "Y"
           ip: "172.30.Y.2/24"
           hsrp: { group: 61, ip: "172.30.Y.254", priority: 100, preempt: true }
+        - vlan_id: "Z"
+          ip: "172.30.Z.2/24"
+          hsrp: { group: 85, ip: "172.30.Z.254", priority: 100, preempt: true }
 
     DLS2:
       vtp:
@@ -370,6 +373,9 @@ devices:
         - vlan_id: "Y"
           ip: "172.30.Y.3/24"
           hsrp: { group: 61, ip: "172.30.Y.254", priority: 110, preempt: true }
+        - vlan_id: "Z"
+          ip: "172.30.Z.3/24"
+          hsrp: { group: 85, ip: "172.30.Z.254", priority: 110, preempt: true }
 
   layer2_switches:
     ALS1:
